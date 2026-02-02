@@ -25,7 +25,7 @@ set -euo pipefail
 # =============================================================================
 
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_VERSION="1.1.0"
+readonly SCRIPT_VERSION="1.2.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Paths
@@ -43,6 +43,7 @@ NO_BACKUP=false
 BACKUP_DIR="$DEFAULT_BACKUP_DIR"
 DO_ROLLBACK=false
 DO_RESTORE=false
+DO_RESTORE_MINIMAL=false
 RESTORE_BACKUP=""
 INTERACTIVE=false
 FORCE=false
@@ -411,6 +412,9 @@ create_backup() {
     # Backup release RPM files
     backup_release_rpms "$CURRENT_BACKUP_DIR"
 
+    # Backup files that will be deleted
+    backup_deleted_files "$CURRENT_BACKUP_DIR"
+
     # Create metadata file
     log_message "INFO" "Creating backup metadata..."
     local rpm_count
@@ -703,6 +707,209 @@ backup_release_rpms() {
         rpm -qi "$pkg" >> "${backup_dir}/release-packages-info.txt" 2>/dev/null || true
         echo "---" >> "${backup_dir}/release-packages-info.txt"
     done
+}
+
+# Backup files and directories that will be deleted during liberation
+backup_deleted_files() {
+    local backup_dir="$1"
+    local deleted_dir="${backup_dir}/deleted-files"
+
+    log_message "INFO" "Backing up files that will be deleted..."
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_message "DRY-RUN" "Would backup deleted files to $deleted_dir"
+        return 0
+    fi
+
+    mkdir -p "$deleted_dir"
+
+    # List of files/directories that are deleted during liberation
+    local files_to_backup=(
+        "/usr/share/redhat-release"
+        "/etc/dnf/protected.d/redhat-release.conf"
+        "/etc/os-release"
+        "/etc/redhat-release"
+        "/etc/system-release"
+        "/etc/system-release-cpe"
+        "/etc/centos-release"
+        "/etc/oracle-release"
+        "/etc/rocky-release"
+        "/etc/almalinux-release"
+        "/etc/eurolinux-release"
+    )
+
+    local backed_up=0
+
+    for item in "${files_to_backup[@]}"; do
+        if [[ -e "$item" ]]; then
+            # Create parent directory structure
+            local parent_dir
+            parent_dir=$(dirname "$item")
+            mkdir -p "${deleted_dir}${parent_dir}"
+
+            if [[ -d "$item" ]]; then
+                # Copy directory recursively
+                cp -a "$item" "${deleted_dir}${parent_dir}/" 2>/dev/null && ((backed_up++))
+                log_message "INFO" "Backed up directory: $item"
+            else
+                # Copy file
+                cp -a "$item" "${deleted_dir}${item}" 2>/dev/null && ((backed_up++))
+                log_message "INFO" "Backed up file: $item"
+            fi
+        fi
+    done
+
+    # Create manifest of backed up files
+    find "$deleted_dir" -type f -o -type l 2>/dev/null | sed "s|${deleted_dir}||" > "${backup_dir}/deleted-files.manifest"
+
+    log_message "SUCCESS" "Backed up $backed_up file(s)/directory(ies) that will be deleted"
+}
+
+# Minimal restore - only restore deleted files and release package
+restore_minimal() {
+    local backup_name="${RESTORE_BACKUP:-latest}"
+    local backup_path
+
+    log_message "INFO" "Starting minimal restore (deleted files and release package only)..."
+
+    # Resolve backup path
+    if [[ "$backup_name" == "latest" ]]; then
+        if [[ ! -L "${BACKUP_DIR}/latest" ]]; then
+            log_message "ERROR" "No latest backup found"
+            list_backups
+            exit 1
+        fi
+        backup_path=$(readlink -f "${BACKUP_DIR}/latest")
+    else
+        backup_path="${BACKUP_DIR}/${backup_name}"
+    fi
+
+    if [[ ! -d "$backup_path" ]]; then
+        log_message "ERROR" "Backup not found: $backup_path"
+        list_backups
+        exit 1
+    fi
+
+    log_message "INFO" "Restoring from backup: $backup_path"
+
+    # Load original OS info from metadata
+    local orig_os_name orig_os_version
+    if command -v jq &>/dev/null; then
+        orig_os_name=$(jq -r '.os_name' "$backup_path/metadata.json")
+        orig_os_version=$(jq -r '.os_version' "$backup_path/metadata.json")
+    else
+        orig_os_name=$(grep -o '"os_name"[^,]*' "$backup_path/metadata.json" | cut -d'"' -f4)
+        orig_os_version=$(grep -o '"os_version"[^,]*' "$backup_path/metadata.json" | cut -d'"' -f4)
+    fi
+
+    echo ""
+    print_color blue "Minimal Restore Information:"
+    echo "  Backup: $(basename "$backup_path")"
+    echo "  Original OS: $orig_os_name $orig_os_version"
+    echo ""
+    echo "This will restore:"
+    echo "  - Deleted files (/usr/share/redhat-release, /etc/dnf/protected.d/*, etc.)"
+    echo "  - Original release package(s)"
+    echo ""
+    echo "This will NOT remove SUSE packages (use --restore for full restore)"
+    echo ""
+
+    if [[ "$DRY_RUN" == true ]]; then
+        log_message "DRY-RUN" "Would perform minimal restore"
+        return 0
+    fi
+
+    if ! confirm "Proceed with minimal restore?"; then
+        log_message "INFO" "Restore cancelled by user"
+        exit 0
+    fi
+
+    local restored_count=0
+
+    # Step 1: Restore deleted files
+    log_message "INFO" "Step 1/2: Restoring deleted files..."
+
+    local deleted_dir="${backup_path}/deleted-files"
+    if [[ -d "$deleted_dir" ]]; then
+        # Restore each file/directory from the backup
+        if [[ -f "${backup_path}/deleted-files.manifest" ]]; then
+            while IFS= read -r file; do
+                if [[ -n "$file" ]] && [[ -e "${deleted_dir}${file}" ]]; then
+                    local parent_dir
+                    parent_dir=$(dirname "$file")
+                    mkdir -p "$parent_dir" 2>/dev/null || true
+
+                    if cp -a "${deleted_dir}${file}" "$file" 2>/dev/null; then
+                        log_message "INFO" "Restored: $file"
+                        ((restored_count++))
+                    else
+                        log_message "WARN" "Failed to restore: $file"
+                    fi
+                fi
+            done < "${backup_path}/deleted-files.manifest"
+        else
+            # Fallback: copy everything from deleted-files
+            cp -a "${deleted_dir}/"* / 2>/dev/null || true
+            log_message "INFO" "Restored deleted files from backup"
+        fi
+    else
+        log_message "WARN" "No deleted-files directory in backup"
+    fi
+
+    # Step 2: Install original release package
+    log_message "INFO" "Step 2/2: Installing original release package..."
+
+    local rpm_dir="${backup_path}/rpms"
+    local rpms_installed=false
+
+    if [[ -d "$rpm_dir" ]] && [[ -n "$(ls -A "$rpm_dir"/*.rpm 2>/dev/null)" ]]; then
+        log_message "INFO" "Installing RPMs from backup..."
+
+        # Install the RPMs (force to handle conflicts with SUSE packages)
+        if rpm -Uvh --force --nodeps "$rpm_dir"/*.rpm 2>&1 | tee -a "$LOG_FILE"; then
+            rpms_installed=true
+            log_message "SUCCESS" "Release packages installed from backup"
+        else
+            log_message "WARN" "Some RPMs failed to install"
+        fi
+    else
+        # Try to install from repos using package list
+        if [[ -f "$backup_path/release-packages.list" ]]; then
+            log_message "INFO" "RPMs not in backup, attempting install from repositories..."
+            local pkg_list
+            pkg_list=$(cat "$backup_path/release-packages.list" | tr '\n' ' ')
+
+            if command -v dnf &>/dev/null; then
+                dnf install -y --allowerasing $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
+            elif command -v yum &>/dev/null; then
+                yum install -y $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
+            fi
+        fi
+    fi
+
+    if [[ "$rpms_installed" == false ]]; then
+        log_message "WARN" "Could not install release packages"
+        if [[ -f "$backup_path/release-packages.list" ]]; then
+            echo ""
+            echo "Packages to install manually:"
+            cat "$backup_path/release-packages.list"
+        fi
+    fi
+
+    echo ""
+    log_message "SUCCESS" "Minimal restore completed!"
+    echo ""
+    echo "Summary:"
+    echo "  - Restored $restored_count deleted file(s)"
+    if [[ "$rpms_installed" == true ]]; then
+        echo "  - Original release packages installed"
+    else
+        echo "  - Release packages: MANUAL INSTALLATION REQUIRED"
+    fi
+    echo ""
+    echo "Note: SUSE packages are still installed."
+    echo "      Use --restore for full restore (removes SUSE packages)"
+    echo ""
 }
 
 # List available backups
@@ -1498,6 +1705,8 @@ OPTIONS:
     --rollback              Restore repository configs only (partial restore)
     --restore [name]        Full system restore (removes SUSE, reinstalls original)
                             Use 'latest' or backup timestamp (e.g., 20240115_103045)
+    --restore-minimal [name] Restore only deleted files and release package
+                            Does NOT remove SUSE packages (lighter restore)
 
   Portability options:
     --export-backup <name>  Export a backup to portable archive (.tar.gz)
@@ -1538,6 +1747,9 @@ EXAMPLES:
   # Full restore to original distribution (uses latest backup)
   $SCRIPT_NAME --restore
 
+  # Minimal restore (only deleted files and release package, keeps SUSE)
+  $SCRIPT_NAME --restore-minimal
+
   # Restore from a specific backup
   $SCRIPT_NAME --restore 20240115_103045
 
@@ -1551,6 +1763,7 @@ EXAMPLES:
 BACKUP CONTENTS:
   The backup includes:
   - Release RPM packages (for offline restore)
+  - Deleted files (/usr/share/redhat-release, /etc/dnf/protected.d/*, etc.)
   - Repository configuration files
   - Package list (all installed packages)
   - DNF/YUM configuration
@@ -1609,6 +1822,17 @@ main() {
                 ;;
             --restore)
                 DO_RESTORE=true
+                # Check if next argument is a backup name (not another option)
+                if [[ -n "${2:-}" ]] && [[ ! "$2" =~ ^-- ]]; then
+                    RESTORE_BACKUP="$2"
+                    shift
+                else
+                    RESTORE_BACKUP="latest"
+                fi
+                shift
+                ;;
+            --restore-minimal)
+                DO_RESTORE_MINIMAL=true
                 # Check if next argument is a backup name (not another option)
                 if [[ -n "${2:-}" ]] && [[ ! "$2" =~ ^-- ]]; then
                     RESTORE_BACKUP="$2"
@@ -1693,6 +1917,12 @@ main() {
     # Handle restore mode (full restore)
     if [[ "$DO_RESTORE" == true ]]; then
         restore_original_system
+        exit $?
+    fi
+
+    # Handle restore-minimal mode (only deleted files and release package)
+    if [[ "$DO_RESTORE_MINIMAL" == true ]]; then
+        restore_minimal
         exit $?
     fi
 

@@ -88,6 +88,10 @@ sudo ./liberate.sh --import-backup liberate-backup-20240115_103045.tar.gz
 # Restauration complète vers l'OS original (utilise la dernière sauvegarde)
 sudo ./liberate.sh --restore
 
+# Restauration minimale (fichiers supprimés + paquet release uniquement)
+# Ne supprime PAS les paquets SUSE
+sudo ./liberate.sh --restore-minimal
+
 # Restauration depuis une sauvegarde spécifique
 sudo ./liberate.sh --restore 20240115_103045
 
@@ -106,6 +110,7 @@ sudo ./liberate.sh --rollback
 | `--backup-dir <path>` | Répertoire de backup (défaut: /var/lib/liberate/backups) |
 | `--list-backups` | Liste les sauvegardes disponibles |
 | `--restore [name]` | Restauration complète vers l'OS original |
+| `--restore-minimal [name]` | Restauration minimale (fichiers + paquet release) |
 | `--rollback` | Restauration partielle (repos uniquement) |
 | `--export-backup <name>` | Exporte une sauvegarde en archive |
 | `--import-backup <file>` | Importe une sauvegarde depuis une archive |
@@ -122,12 +127,16 @@ sudo ./liberate.sh --rollback
 ├── rpms/                      # RPMs des paquets de release
 │   ├── rocky-release-*.rpm
 │   └── SHA256SUMS
+├── deleted-files/             # Fichiers supprimés lors de la migration
+│   ├── usr/share/redhat-release/
+│   └── etc/dnf/protected.d/redhat-release.conf
 ├── repos/                     # Fichiers .repo
 ├── release-files/             # /etc/os-release, etc.
 ├── dnf-yum-config/            # Configuration dnf/yum
 ├── packages.list              # Liste de tous les paquets
 ├── release-packages.list      # Liste des paquets de release
 ├── release-packages-info.txt  # Infos détaillées des paquets
+├── deleted-files.manifest     # Liste des fichiers supprimés
 └── metadata.json              # Métadonnées du système
 ```
 
@@ -251,6 +260,10 @@ sudo ./liberate.sh --import-backup liberate-backup-20240115_103045.tar.gz
 # Full restore to original OS (uses latest backup)
 sudo ./liberate.sh --restore
 
+# Minimal restore (deleted files + release package only)
+# Does NOT remove SUSE packages
+sudo ./liberate.sh --restore-minimal
+
 # Restore from a specific backup
 sudo ./liberate.sh --restore 20240115_103045
 
@@ -269,6 +282,7 @@ sudo ./liberate.sh --rollback
 | `--backup-dir <path>` | Backup directory (default: /var/lib/liberate/backups) |
 | `--list-backups` | List available backups |
 | `--restore [name]` | Full restore to original OS |
+| `--restore-minimal [name]` | Minimal restore (files + release package) |
 | `--rollback` | Partial restore (repos only) |
 | `--export-backup <name>` | Export a backup as archive |
 | `--import-backup <file>` | Import a backup from archive |
@@ -285,12 +299,16 @@ sudo ./liberate.sh --rollback
 ├── rpms/                      # Release package RPMs
 │   ├── rocky-release-*.rpm
 │   └── SHA256SUMS
+├── deleted-files/             # Files deleted during migration
+│   ├── usr/share/redhat-release/
+│   └── etc/dnf/protected.d/redhat-release.conf
 ├── repos/                     # .repo files
 ├── release-files/             # /etc/os-release, etc.
 ├── dnf-yum-config/            # dnf/yum configuration
 ├── packages.list              # List of all packages
 ├── release-packages.list      # List of release packages
 ├── release-packages-info.txt  # Detailed package info
+├── deleted-files.manifest     # List of deleted files
 └── metadata.json              # System metadata
 ```
 
