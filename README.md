@@ -1,5 +1,7 @@
 # liberate.sh - Conversion Enterprise Linux vers SUSE Liberty Linux
 
+**Version**: 1.2.0
+
 [English version below](#english-version)
 
 ---
@@ -37,9 +39,19 @@ Ce script est basé sur la [liberate-formula](https://github.com/SUSE/liberate-f
 ## Prérequis
 
 - **Droits root** requis
-- **Dépôts SUSE** configurés avant l'exécution
+- **Dépôts SUSE** configurés avant l'exécution ([Documentation SUSE](https://www.suse.com/support/kb/doc/?id=000019587))
 - **Espace disque** : minimum 100 Mo pour les sauvegardes
 - Connectivité réseau aux dépôts
+
+## Avertissements
+
+> ⚠️ **Précautions importantes avant migration**
+
+- **Tester en environnement non-production** d'abord
+- **S'assurer de la connectivité réseau** aux dépôts SUSE
+- **Vérifier l'espace disque disponible** (minimum 100 Mo)
+- **Ne pas interrompre** le processus de migration une fois démarré
+- **Créer une sauvegarde système complète** avant la migration (snapshot VM, backup, etc.)
 
 ## Installation
 
@@ -99,6 +111,14 @@ sudo ./liberate.sh --restore 20240115_103045
 sudo ./liberate.sh --rollback
 ```
 
+### Comparaison des modes de restauration
+
+| Mode | Supprime SUSE | Restaure repos | Restaure fichiers supprimés | Restaure paquet release |
+|------|:-------------:|:--------------:|:---------------------------:|:-----------------------:|
+| `--restore` | ✓ | ✓ | ✓ | ✓ |
+| `--restore-minimal` | ✗ | ✗ | ✓ | ✓ |
+| `--rollback` | ✗ | ✓ | ✗ | ✗ |
+
 ## Options
 
 | Option | Description |
@@ -149,6 +169,34 @@ sudo ./liberate.sh --rollback
 | `/var/log/dnf_sll_migration.log` | Log de réinstallation (EL9) |
 | `/var/log/yum_sles_es_migration.log` | Log de réinstallation (EL7/8) |
 
+## Codes de sortie
+
+| Code | Signification |
+|------|---------------|
+| 0 | Succès |
+| 1 | Erreur (consulter /var/log/liberate.log) |
+
+## Troubleshooting
+
+### Erreurs courantes
+
+| Message d'erreur | Cause | Solution |
+|------------------|-------|----------|
+| `This script must be run as root` | Script exécuté sans privilèges root | Exécuter avec `sudo ./liberate.sh` |
+| `Unsupported distribution: xxx` | Distribution non prise en charge | Vérifier la liste des distributions supportées |
+| `System already liberated` | Migration déjà effectuée | Utiliser `--force` pour ré-exécuter |
+| `Insufficient disk space` | Espace disque insuffisant | Libérer au moins 100 Mo |
+| `SUSE repos not configured` | Dépôts SUSE manquants | Configurer les dépôts avant migration |
+| `Backup not found` | Sauvegarde introuvable | Vérifier avec `--list-backups` |
+| `Failed to download packages` | Problème réseau | Vérifier la connectivité aux dépôts |
+
+### Conseils de dépannage
+
+1. **Consulter les logs** : `/var/log/liberate.log` contient les détails de toutes les opérations
+2. **Mode verbose** : Utiliser `--verbose` pour obtenir plus d'informations
+3. **Mode dry-run** : Utiliser `--dry-run` pour tester sans modifier le système
+4. **Vérifier les dépôts** : `dnf repolist` ou `yum repolist` pour vérifier la configuration
+
 ## Exemple de workflow complet
 
 ```bash
@@ -173,6 +221,8 @@ MIT License
 ---
 
 # English Version
+
+**Version**: 1.2.0
 
 ---
 
@@ -209,9 +259,19 @@ This script is based on the [liberate-formula](https://github.com/SUSE/liberate-
 ## Prerequisites
 
 - **Root privileges** required
-- **SUSE repositories** must be configured before running
+- **SUSE repositories** must be configured before running ([SUSE Documentation](https://www.suse.com/support/kb/doc/?id=000019587))
 - **Disk space**: minimum 100 MB for backups
 - Network connectivity to repositories
+
+## Warnings
+
+> ⚠️ **Important precautions before migration**
+
+- **Test in a non-production environment** first
+- **Ensure network connectivity** to SUSE repositories
+- **Check available disk space** (minimum 100 MB)
+- **Do not interrupt** the migration process once started
+- **Create a full system backup** before migration (VM snapshot, backup, etc.)
 
 ## Installation
 
@@ -271,6 +331,14 @@ sudo ./liberate.sh --restore 20240115_103045
 sudo ./liberate.sh --rollback
 ```
 
+### Restore Modes Comparison
+
+| Mode | Removes SUSE | Restores repos | Restores deleted files | Restores release package |
+|------|:------------:|:--------------:|:----------------------:|:------------------------:|
+| `--restore` | ✓ | ✓ | ✓ | ✓ |
+| `--restore-minimal` | ✗ | ✗ | ✓ | ✓ |
+| `--rollback` | ✗ | ✓ | ✗ | ✗ |
+
 ## Options
 
 | Option | Description |
@@ -320,6 +388,34 @@ sudo ./liberate.sh --rollback
 | `/var/log/liberate.log` | Main log |
 | `/var/log/dnf_sll_migration.log` | Reinstall log (EL9) |
 | `/var/log/yum_sles_es_migration.log` | Reinstall log (EL7/8) |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error (check /var/log/liberate.log) |
+
+## Troubleshooting
+
+### Common Errors
+
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `This script must be run as root` | Script run without root privileges | Run with `sudo ./liberate.sh` |
+| `Unsupported distribution: xxx` | Distribution not supported | Check the list of supported distributions |
+| `System already liberated` | Migration already performed | Use `--force` to re-run |
+| `Insufficient disk space` | Not enough disk space | Free at least 100 MB |
+| `SUSE repos not configured` | Missing SUSE repositories | Configure repositories before migration |
+| `Backup not found` | Backup not found | Check with `--list-backups` |
+| `Failed to download packages` | Network issue | Check connectivity to repositories |
+
+### Troubleshooting Tips
+
+1. **Check the logs**: `/var/log/liberate.log` contains details of all operations
+2. **Verbose mode**: Use `--verbose` for more information
+3. **Dry-run mode**: Use `--dry-run` to test without modifying the system
+4. **Check repositories**: `dnf repolist` or `yum repolist` to verify configuration
 
 ## Complete Workflow Example
 
