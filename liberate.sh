@@ -25,7 +25,7 @@ set -euo pipefail
 # =============================================================================
 
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_VERSION="1.2.0"
+readonly SCRIPT_VERSION="1.3.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Paths

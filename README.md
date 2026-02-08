@@ -1,6 +1,6 @@
 # liberate.sh - Conversion Enterprise Linux vers SUSE Liberty Linux
 
-**Version**: 1.2.0
+**Version**: 1.3.0
 
 [English version below](#english-version)
 
@@ -280,7 +280,7 @@ MIT License
 
 # English Version
 
-**Version**: 1.2.0
+**Version**: 1.3.0
 
 ---
 
