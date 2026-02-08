@@ -15,11 +15,15 @@ Ce script est basé sur la [liberate-formula](https://github.com/SUSE/liberate-f
 ## Fonctionnalités
 
 - **Détection automatique** de l'OS et de la version (7, 8, 9)
+- **Configuration automatique des dépôts SUSE** (`--setup-repos`)
 - **Sauvegarde complète** avant migration :
   - Capture des RPMs des paquets de release originaux
   - Configuration des dépôts
   - Liste de tous les paquets installés
+- **Sauvegarde standalone interactive** (`--backup`) : choix y/n par élément
 - **Restauration complète** vers l'OS original
+- **Restauration granulaire** : repos, paquets release, fichiers, config
+- **Restauration interactive** (`--restore-select`) : vue d'ensemble du backup, sélection du backup si multiples, choix y/n par élément
 - **Portabilité des backups** (export/import en archive)
 - **Mode dry-run** pour prévisualiser les changements
 - **Mode interactif** avec confirmations
@@ -39,7 +43,7 @@ Ce script est basé sur la [liberate-formula](https://github.com/SUSE/liberate-f
 ## Prérequis
 
 - **Droits root** requis
-- **Dépôts SUSE** configurés avant l'exécution ([Documentation SUSE](https://www.suse.com/support/kb/doc/?id=000019587))
+- **Dépôts SUSE** : configurés automatiquement via `--setup-repos`, ou manuellement ([Documentation SUSE](https://www.suse.com/support/kb/doc/?id=000019587))
 - **Espace disque** : minimum 100 Mo pour les sauvegardes
 - Connectivité réseau aux dépôts
 
@@ -81,9 +85,29 @@ sudo ./liberate.sh --install-logos
 sudo ./liberate.sh --dry-run --verbose
 ```
 
+### Configuration des dépôts SUSE
+
+```bash
+# Configuration automatique des dépôts (détecte EL7/8/9)
+sudo ./liberate.sh --setup-repos
+
+# Forcer la reconfiguration (écrase les repos existants)
+sudo ./liberate.sh --setup-repos --force
+
+# Prévisualiser la configuration
+sudo ./liberate.sh --setup-repos --dry-run -v
+```
+
+Le script configure automatiquement :
+- **EL9** : dépôts SUSE Liberty Linux (SLL) dans `/etc/yum.repos.d/sll.repo`
+- **EL7/8** : dépôts SLES Expanded Support dans `/etc/yum.repos.d/sles_es.repo`
+
 ### Gestion des sauvegardes
 
 ```bash
+# Sauvegarde interactive (choix y/n par élément)
+sudo ./liberate.sh --backup -v
+
 # Lister les sauvegardes disponibles
 sudo ./liberate.sh --list-backups
 
@@ -111,13 +135,40 @@ sudo ./liberate.sh --restore 20240115_103045
 sudo ./liberate.sh --rollback
 ```
 
+### Restauration granulaire
+
+```bash
+# Restaurer uniquement les dépôts
+sudo ./liberate.sh --restore-repos
+
+# Restaurer uniquement les paquets release (RPMs)
+sudo ./liberate.sh --restore-release
+
+# Restaurer uniquement les fichiers supprimés
+sudo ./liberate.sh --restore-files
+
+# Restaurer uniquement la configuration dnf/yum
+sudo ./liberate.sh --restore-config
+
+# Mode interactif : sélection du backup + choix y/n par élément
+sudo ./liberate.sh --restore-select
+
+# Restauration granulaire depuis une sauvegarde spécifique
+sudo ./liberate.sh --restore-repos 20240115_103045
+```
+
 ### Comparaison des modes de restauration
 
-| Mode | Supprime SUSE | Restaure repos | Restaure fichiers supprimés | Restaure paquet release |
-|------|:-------------:|:--------------:|:---------------------------:|:-----------------------:|
-| `--restore` | ✓ | ✓ | ✓ | ✓ |
-| `--restore-minimal` | ✗ | ✗ | ✓ | ✓ |
-| `--rollback` | ✗ | ✓ | ✗ | ✗ |
+| Mode | Supprime SUSE | Restaure repos | Restaure fichiers supprimés | Restaure paquet release | Restaure config |
+|------|:-------------:|:--------------:|:---------------------------:|:-----------------------:|:---------------:|
+| `--restore` | oui | oui | oui | oui | oui |
+| `--restore-minimal` | non | non | oui | oui | non |
+| `--rollback` | non | oui | non | non | non |
+| `--restore-repos` | non | oui | non | non | non |
+| `--restore-release` | non | non | non | oui | non |
+| `--restore-files` | non | non | oui | non | non |
+| `--restore-config` | non | non | non | non | oui |
+| `--restore-select` | choix | choix | choix | choix | choix |
 
 ## Options
 
@@ -125,12 +176,19 @@ sudo ./liberate.sh --rollback
 |--------|-------------|
 | `--reinstall-packages` | Réinstalle tous les paquets depuis les dépôts SUSE |
 | `--install-logos` | Installe les paquets de logos/branding SUSE |
+| `--setup-repos` | Configure automatiquement les dépôts SUSE |
 | `--dry-run` | Affiche les commandes sans les exécuter |
+| `--backup` | Sauvegarde standalone interactive (choix y/n par élément) |
 | `--no-backup` | Désactive la sauvegarde automatique |
 | `--backup-dir <path>` | Répertoire de backup (défaut: /var/lib/liberate/backups) |
 | `--list-backups` | Liste les sauvegardes disponibles |
 | `--restore [name]` | Restauration complète vers l'OS original |
 | `--restore-minimal [name]` | Restauration minimale (fichiers + paquet release) |
+| `--restore-repos [name]` | Restaurer uniquement les dépôts |
+| `--restore-release [name]` | Restaurer uniquement les paquets release |
+| `--restore-files [name]` | Restaurer uniquement les fichiers supprimés |
+| `--restore-config [name]` | Restaurer uniquement la configuration dnf/yum |
+| `--restore-select [name]` | Restauration interactive (sélection backup + y/n par élément) |
 | `--rollback` | Restauration partielle (repos uniquement) |
 | `--export-backup <name>` | Exporte une sauvegarde en archive |
 | `--import-backup <file>` | Importe une sauvegarde depuis une archive |
@@ -200,8 +258,8 @@ sudo ./liberate.sh --rollback
 ## Exemple de workflow complet
 
 ```bash
-# 1. Configurer les dépôts SUSE (non géré par ce script)
-# ... configuration des repos SUSE ...
+# 1. Configurer les dépôts SUSE
+sudo ./liberate.sh --setup-repos
 
 # 2. Effectuer la migration
 sudo ./liberate.sh --interactive --verbose
@@ -235,11 +293,15 @@ This script is based on the [liberate-formula](https://github.com/SUSE/liberate-
 ## Features
 
 - **Automatic detection** of OS and version (7, 8, 9)
+- **Automatic SUSE repository configuration** (`--setup-repos`)
 - **Complete backup** before migration:
   - Captures original release package RPMs
   - Repository configuration
   - List of all installed packages
+- **Standalone interactive backup** (`--backup`): y/n choice per element
 - **Full restore** to original OS
+- **Granular restore**: repos, release packages, files, config
+- **Interactive restore** (`--restore-select`): backup overview, backup selector if multiple, y/n choice per element
 - **Backup portability** (export/import as archive)
 - **Dry-run mode** to preview changes
 - **Interactive mode** with confirmations
@@ -259,7 +321,7 @@ This script is based on the [liberate-formula](https://github.com/SUSE/liberate-
 ## Prerequisites
 
 - **Root privileges** required
-- **SUSE repositories** must be configured before running ([SUSE Documentation](https://www.suse.com/support/kb/doc/?id=000019587))
+- **SUSE repositories**: automatically configured via `--setup-repos`, or manually ([SUSE Documentation](https://www.suse.com/support/kb/doc/?id=000019587))
 - **Disk space**: minimum 100 MB for backups
 - Network connectivity to repositories
 
@@ -304,6 +366,9 @@ sudo ./liberate.sh --dry-run --verbose
 ### Backup Management
 
 ```bash
+# Interactive backup (y/n per element)
+sudo ./liberate.sh --backup -v
+
 # List available backups
 sudo ./liberate.sh --list-backups
 
@@ -312,6 +377,19 @@ sudo ./liberate.sh --export-backup latest
 
 # Import a backup
 sudo ./liberate.sh --import-backup liberate-backup-20240115_103045.tar.gz
+```
+
+### SUSE Repository Setup
+
+```bash
+# Automatic repository configuration (detects EL7/8/9)
+sudo ./liberate.sh --setup-repos
+
+# Force reconfiguration (overwrites existing repos)
+sudo ./liberate.sh --setup-repos --force
+
+# Preview configuration
+sudo ./liberate.sh --setup-repos --dry-run -v
 ```
 
 ### Restore
@@ -331,13 +409,40 @@ sudo ./liberate.sh --restore 20240115_103045
 sudo ./liberate.sh --rollback
 ```
 
+### Granular Restore
+
+```bash
+# Restore only repositories
+sudo ./liberate.sh --restore-repos
+
+# Restore only release packages (RPMs)
+sudo ./liberate.sh --restore-release
+
+# Restore only deleted files
+sudo ./liberate.sh --restore-files
+
+# Restore only dnf/yum configuration
+sudo ./liberate.sh --restore-config
+
+# Interactive mode: backup selector + y/n per element
+sudo ./liberate.sh --restore-select
+
+# Granular restore from a specific backup
+sudo ./liberate.sh --restore-repos 20240115_103045
+```
+
 ### Restore Modes Comparison
 
-| Mode | Removes SUSE | Restores repos | Restores deleted files | Restores release package |
-|------|:------------:|:--------------:|:----------------------:|:------------------------:|
-| `--restore` | ✓ | ✓ | ✓ | ✓ |
-| `--restore-minimal` | ✗ | ✗ | ✓ | ✓ |
-| `--rollback` | ✗ | ✓ | ✗ | ✗ |
+| Mode | Removes SUSE | Restores repos | Restores deleted files | Restores release package | Restores config |
+|------|:------------:|:--------------:|:----------------------:|:------------------------:|:---------------:|
+| `--restore` | yes | yes | yes | yes | yes |
+| `--restore-minimal` | no | no | yes | yes | no |
+| `--rollback` | no | yes | no | no | no |
+| `--restore-repos` | no | yes | no | no | no |
+| `--restore-release` | no | no | no | yes | no |
+| `--restore-files` | no | no | yes | no | no |
+| `--restore-config` | no | no | no | no | yes |
+| `--restore-select` | choice | choice | choice | choice | choice |
 
 ## Options
 
@@ -345,12 +450,19 @@ sudo ./liberate.sh --rollback
 |--------|-------------|
 | `--reinstall-packages` | Reinstall all packages from SUSE repositories |
 | `--install-logos` | Install SUSE logos/branding packages |
+| `--setup-repos` | Automatically configure SUSE repositories |
 | `--dry-run` | Show commands without executing them |
+| `--backup` | Standalone interactive backup (y/n per element) |
 | `--no-backup` | Disable automatic backup |
 | `--backup-dir <path>` | Backup directory (default: /var/lib/liberate/backups) |
 | `--list-backups` | List available backups |
 | `--restore [name]` | Full restore to original OS |
 | `--restore-minimal [name]` | Minimal restore (files + release package) |
+| `--restore-repos [name]` | Restore only repositories |
+| `--restore-release [name]` | Restore only release packages |
+| `--restore-files [name]` | Restore only deleted files |
+| `--restore-config [name]` | Restore only dnf/yum configuration |
+| `--restore-select [name]` | Interactive restore (backup selector + y/n per element) |
 | `--rollback` | Partial restore (repos only) |
 | `--export-backup <name>` | Export a backup as archive |
 | `--import-backup <file>` | Import a backup from archive |
@@ -420,8 +532,8 @@ sudo ./liberate.sh --rollback
 ## Complete Workflow Example
 
 ```bash
-# 1. Configure SUSE repositories (not managed by this script)
-# ... SUSE repo configuration ...
+# 1. Configure SUSE repositories
+sudo ./liberate.sh --setup-repos
 
 # 2. Perform migration
 sudo ./liberate.sh --interactive --verbose
