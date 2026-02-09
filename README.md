@@ -1,6 +1,6 @@
 # liberate.sh - Conversion Enterprise Linux vers SUSE Liberty Linux
 
-**Version**: 1.3.0
+**Version**: 1.3.1
 
 [English version below](#english-version)
 
@@ -117,6 +117,22 @@ sudo ./liberate.sh --export-backup latest
 # Importer une sauvegarde
 sudo ./liberate.sh --import-backup liberate-backup-20240115_103045.tar.gz
 ```
+
+### Éléments sauvegardés
+
+Lors d'une migration classique, tous les éléments sont sauvegardés automatiquement.
+Avec `--backup`, chaque élément peut être inclus ou exclu individuellement (prompts y/n).
+
+| Élément | Description | Contenu |
+|---------|-------------|---------|
+| Liste des paquets | `rpm -qa` complet du système | `packages.list` |
+| Dépôts | Fichiers `/etc/yum.repos.d/*.repo` | `repos/` |
+| Fichiers release | `/etc/os-release`, `/etc/redhat-release`, etc. | `release-files/` |
+| Configuration dnf/yum | `/etc/dnf/dnf.conf`, `/etc/yum.conf`, `protected.d/` | `dnf-yum-config/` |
+| RPMs release | Paquets release originaux (download) | `rpms/` |
+| Fichiers supprimés | Fichiers qui seront supprimés lors de la migration | `deleted-files/` |
+
+Le fichier `metadata.json` est toujours créé et contient les métadonnées du système ainsi que la liste des éléments effectivement sauvegardés (`backed_up_elements`).
 
 ### Restauration
 
@@ -280,7 +296,7 @@ MIT License
 
 # English Version
 
-**Version**: 1.3.0
+**Version**: 1.3.1
 
 ---
 
@@ -378,6 +394,22 @@ sudo ./liberate.sh --export-backup latest
 # Import a backup
 sudo ./liberate.sh --import-backup liberate-backup-20240115_103045.tar.gz
 ```
+
+### Backup Elements
+
+During a standard migration, all elements are backed up automatically.
+With `--backup`, each element can be included or excluded individually (y/n prompts).
+
+| Element | Description | Content |
+|---------|-------------|---------|
+| Package list | Full `rpm -qa` of the system | `packages.list` |
+| Repositories | `/etc/yum.repos.d/*.repo` files | `repos/` |
+| Release files | `/etc/os-release`, `/etc/redhat-release`, etc. | `release-files/` |
+| dnf/yum config | `/etc/dnf/dnf.conf`, `/etc/yum.conf`, `protected.d/` | `dnf-yum-config/` |
+| Release RPMs | Original release packages (downloaded) | `rpms/` |
+| Deleted files | Files that will be deleted during migration | `deleted-files/` |
+
+The `metadata.json` file is always created and contains system metadata along with the list of elements actually backed up (`backed_up_elements`).
 
 ### SUSE Repository Setup
 
