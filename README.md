@@ -1,6 +1,6 @@
 # liberate.sh - Conversion Enterprise Linux vers SUSE Liberty Linux
 
-**Version**: 1.3.1
+**Version**: 1.3.2
 
 [English version below](#english-version)
 
@@ -14,20 +14,20 @@ Ce script est basé sur la [liberate-formula](https://github.com/SUSE/liberate-f
 
 ## Fonctionnalités
 
-- **Détection automatique** de l'OS et de la version (7, 8, 9)
-- **Configuration automatique des dépôts SUSE** (`--setup-repos`)
-- **Sauvegarde complète** avant migration :
+- [**Détection automatique**](#distributions-supportées) de l'OS et de la version (7, 8, 9)
+- [**Configuration automatique des dépôts SUSE**](#configuration-des-dépôts-suse) (`--setup-repos`)
+- [**Sauvegarde complète**](#gestion-des-sauvegardes) avant migration :
   - Capture des RPMs des paquets de release originaux
   - Configuration des dépôts
   - Liste de tous les paquets installés
-- **Sauvegarde standalone interactive** (`--backup`) : choix y/n par élément
-- **Restauration complète** vers l'OS original
-- **Restauration granulaire** : repos, paquets release, fichiers, config
-- **Restauration interactive** (`--restore-select`) : vue d'ensemble du backup, sélection du backup si multiples, choix y/n par élément
-- **Portabilité des backups** (export/import en archive)
+- [**Sauvegarde standalone interactive**](#éléments-sauvegardés) (`--backup`) : choix y/n par élément
+- [**Restauration complète**](#restauration) vers l'OS original
+- [**Restauration granulaire**](#restauration-granulaire) : repos, paquets release, fichiers, config
+- [**Restauration interactive**](#comparaison-des-modes-de-restauration) (`--restore-select`) : vue d'ensemble du backup, sélection du backup si multiples, choix y/n par élément
+- [**Portabilité des backups**](#gestion-des-sauvegardes) (export/import en archive)
 - **Mode dry-run** pour prévisualiser les changements
 - **Mode interactif** avec confirmations
-- **Rapports de migration** détaillés
+- [**Rapports de migration**](#exemple-de-workflow-complet) détaillés
 
 ## Distributions supportées
 
@@ -296,7 +296,7 @@ MIT License
 
 # English Version
 
-**Version**: 1.3.1
+**Version**: 1.3.2
 
 ---
 
@@ -308,20 +308,20 @@ This script is based on the [liberate-formula](https://github.com/SUSE/liberate-
 
 ## Features
 
-- **Automatic detection** of OS and version (7, 8, 9)
-- **Automatic SUSE repository configuration** (`--setup-repos`)
-- **Complete backup** before migration:
+- [**Automatic detection**](#supported-distributions) of OS and version (7, 8, 9)
+- [**Automatic SUSE repository configuration**](#suse-repository-setup) (`--setup-repos`)
+- [**Complete backup**](#backup-management) before migration:
   - Captures original release package RPMs
   - Repository configuration
   - List of all installed packages
-- **Standalone interactive backup** (`--backup`): y/n choice per element
-- **Full restore** to original OS
-- **Granular restore**: repos, release packages, files, config
-- **Interactive restore** (`--restore-select`): backup overview, backup selector if multiple, y/n choice per element
-- **Backup portability** (export/import as archive)
+- [**Standalone interactive backup**](#backup-elements) (`--backup`): y/n choice per element
+- [**Full restore**](#restore) to original OS
+- [**Granular restore**](#granular-restore): repos, release packages, files, config
+- [**Interactive restore**](#restore-modes-comparison) (`--restore-select`): backup overview, backup selector if multiple, y/n choice per element
+- [**Backup portability**](#backup-management) (export/import as archive)
 - **Dry-run mode** to preview changes
 - **Interactive mode** with confirmations
-- **Detailed migration reports**
+- [**Detailed migration reports**](#complete-workflow-example)
 
 ## Supported Distributions
 
