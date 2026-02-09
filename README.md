@@ -58,9 +58,9 @@ Ce script est basé sur la [liberate-formula](https://github.com/SUSE/liberate-f
 ### Prérequis
 
 - **Droits root** requis
-- **Dépôts SUSE** : configurés automatiquement via `--setup-repos`, ou manuellement ([Documentation SUSE](https://www.suse.com/support/kb/doc/?id=000019587))
+- **dnf** ou **yum** installé
 - **Espace disque** : minimum 100 Mo pour les sauvegardes
-- Connectivité réseau aux dépôts
+- **Dépôts SUSE** (uniquement pour la migration) : configurés automatiquement via `--setup-repos`, ou manuellement ([Documentation SUSE](https://www.suse.com/support/kb/doc/?id=000019587)). Non requis pour les opérations de sauvegarde et restauration (voir [Utilisation sans dépôts SUSE](#utilisation-sans-dépôts-suse))
 
 ### Utilisation sans dépôts SUSE
 
@@ -442,9 +442,9 @@ This script is based on the [liberate-formula](https://github.com/SUSE/liberate-
 ### Prerequisites
 
 - **Root privileges** required
-- **SUSE repositories**: automatically configured via `--setup-repos`, or manually ([SUSE Documentation](https://www.suse.com/support/kb/doc/?id=000019587))
+- **dnf** or **yum** installed
 - **Disk space**: minimum 100 MB for backups
-- Network connectivity to repositories
+- **SUSE repositories** (migration only): automatically configured via `--setup-repos`, or manually ([SUSE Documentation](https://www.suse.com/support/kb/doc/?id=000019587)). Not required for backup and restore operations (see [Usage Without SUSE Repositories](#usage-without-suse-repositories))
 
 ### Usage Without SUSE Repositories
 
