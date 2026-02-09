@@ -1,6 +1,6 @@
 # liberate.sh - Conversion Enterprise Linux vers SUSE Liberty Linux
 
-**Version**: 1.3.2
+**Version**: 1.4.0
 
 [English version below](#english-version)
 
@@ -46,6 +46,23 @@ Ce script est basé sur la [liberate-formula](https://github.com/SUSE/liberate-f
 - **Dépôts SUSE** : configurés automatiquement via `--setup-repos`, ou manuellement ([Documentation SUSE](https://www.suse.com/support/kb/doc/?id=000019587))
 - **Espace disque** : minimum 100 Mo pour les sauvegardes
 - Connectivité réseau aux dépôts
+
+### Utilisation sans dépôts SUSE
+
+Le script peut être utilisé partiellement sans que les dépôts SUSE soient configurés. Cela permet de préparer un système avant d'avoir accès aux dépôts.
+
+| Fonctionnalité | Sans dépôts SUSE | Avec dépôts SUSE |
+|---|:---:|:---:|
+| `--backup` (sauvegarde) | oui | oui |
+| `--list-backups` | oui | oui |
+| `--export-backup` / `--import-backup` | oui | oui |
+| `--restore-select` / `--restore-*` | oui | oui |
+| `--setup-repos` | oui (crée les fichiers .repo) | - |
+| Migration (commande par défaut) | non | oui |
+| `--reinstall-packages` | non | oui |
+| Téléchargement des RPMs release dans le backup | non (liste uniquement) | oui |
+
+> **Note** : sans dépôts SUSE, le backup ne pourra pas télécharger les RPMs release originaux (`rpms/` restera vide). La liste des paquets sera néanmoins sauvegardée dans `release-packages.list`, ce qui permet une restauration manuelle ultérieure.
 
 ## Avertissements
 
@@ -111,7 +128,10 @@ sudo ./liberate.sh --backup -v
 # Lister les sauvegardes disponibles
 sudo ./liberate.sh --list-backups
 
-# Exporter une sauvegarde (pour transfert vers un autre système)
+# Exporter une sauvegarde (sélection interactive)
+sudo ./liberate.sh --export-backup
+
+# Exporter une sauvegarde spécifique
 sudo ./liberate.sh --export-backup latest
 
 # Importer une sauvegarde
@@ -206,7 +226,7 @@ sudo ./liberate.sh --restore-repos 20240115_103045
 | `--restore-config [name]` | Restaurer uniquement la configuration dnf/yum |
 | `--restore-select [name]` | Restauration interactive (sélection backup + y/n par élément) |
 | `--rollback` | Restauration partielle (repos uniquement) |
-| `--export-backup <name>` | Exporte une sauvegarde en archive |
+| `--export-backup [name]` | Exporte une sauvegarde en archive (sélection interactive si pas de nom) |
 | `--import-backup <file>` | Importe une sauvegarde depuis une archive |
 | `--interactive` | Mode interactif avec confirmations |
 | `--force` | Force la migration même si déjà libéré |
@@ -296,7 +316,7 @@ MIT License
 
 # English Version
 
-**Version**: 1.3.2
+**Version**: 1.4.0
 
 ---
 
@@ -340,6 +360,23 @@ This script is based on the [liberate-formula](https://github.com/SUSE/liberate-
 - **SUSE repositories**: automatically configured via `--setup-repos`, or manually ([SUSE Documentation](https://www.suse.com/support/kb/doc/?id=000019587))
 - **Disk space**: minimum 100 MB for backups
 - Network connectivity to repositories
+
+### Usage Without SUSE Repositories
+
+The script can be partially used without SUSE repositories being configured. This allows preparing a system before repository access is available.
+
+| Feature | Without SUSE repos | With SUSE repos |
+|---|:---:|:---:|
+| `--backup` (backup) | yes | yes |
+| `--list-backups` | yes | yes |
+| `--export-backup` / `--import-backup` | yes | yes |
+| `--restore-select` / `--restore-*` | yes | yes |
+| `--setup-repos` | yes (creates .repo files) | - |
+| Migration (default command) | no | yes |
+| `--reinstall-packages` | no | yes |
+| Release RPM download in backup | no (list only) | yes |
+
+> **Note**: without SUSE repositories, the backup cannot download original release RPMs (`rpms/` will remain empty). The package list will still be saved in `release-packages.list`, allowing manual restore later.
 
 ## Warnings
 
@@ -388,7 +425,10 @@ sudo ./liberate.sh --backup -v
 # List available backups
 sudo ./liberate.sh --list-backups
 
-# Export a backup (for transfer to another system)
+# Export a backup (interactive selector)
+sudo ./liberate.sh --export-backup
+
+# Export a specific backup
 sudo ./liberate.sh --export-backup latest
 
 # Import a backup
@@ -496,7 +536,7 @@ sudo ./liberate.sh --restore-repos 20240115_103045
 | `--restore-config [name]` | Restore only dnf/yum configuration |
 | `--restore-select [name]` | Interactive restore (backup selector + y/n per element) |
 | `--rollback` | Partial restore (repos only) |
-| `--export-backup <name>` | Export a backup as archive |
+| `--export-backup [name]` | Export a backup as archive (interactive selector if no name) |
 | `--import-backup <file>` | Import a backup from archive |
 | `--interactive` | Interactive mode with confirmations |
 | `--force` | Force migration even if already liberated |

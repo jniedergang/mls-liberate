@@ -25,7 +25,7 @@ set -euo pipefail
 # =============================================================================
 
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_VERSION="1.3.2"
+readonly SCRIPT_VERSION="1.4.0"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Paths
@@ -1376,6 +1376,12 @@ export_backup() {
     local backup_name="$1"
     local output_file="$2"
 
+    # Interactive selection if no backup specified
+    if [[ "$backup_name" == "__interactive__" ]]; then
+        _select_backup_interactive || exit 1
+        backup_name="$RESTORE_BACKUP"
+    fi
+
     local backup_path="${BACKUP_DIR}/${backup_name}"
 
     if [[ "$backup_name" == "latest" ]] && [[ -L "${BACKUP_DIR}/latest" ]]; then
@@ -2243,7 +2249,8 @@ OPTIONS:
     --restore-select [name] Interactive menu to select what to restore
 
   Portability options:
-    --export-backup <name>  Export a backup to portable archive (.tar.gz)
+    --export-backup [name]  Export a backup to portable archive (.tar.gz)
+                            Interactive backup selector if no name given
     --import-backup <file>  Import a backup from archive
 
   Other options:
@@ -2290,7 +2297,10 @@ EXAMPLES:
   # Restore from a specific backup
   $SCRIPT_NAME --restore 20240115_103045
 
-  # Export backup for use on another system
+  # Export backup (interactive selector)
+  $SCRIPT_NAME --export-backup
+
+  # Export a specific backup
   $SCRIPT_NAME --export-backup latest
 
   # Import and restore backup on another system
@@ -2449,12 +2459,13 @@ parse_args() {
                 shift
                 ;;
             --export-backup)
-                if [[ -z "${2:-}" ]]; then
-                    log_message "ERROR" "--export-backup requires a backup name"
-                    exit 1
+                if [[ -n "${2:-}" ]] && [[ ! "$2" =~ ^- ]]; then
+                    EXPORT_BACKUP="$2"
+                    shift 2
+                else
+                    EXPORT_BACKUP="__interactive__"
+                    shift
                 fi
-                EXPORT_BACKUP="$2"
-                shift 2
                 ;;
             --import-backup)
                 if [[ -z "${2:-}" ]]; then
