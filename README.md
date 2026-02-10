@@ -1,6 +1,6 @@
 # liberate.sh - Conversion Enterprise Linux vers SUSE Liberty Linux
 
-**Version**: 1.5.0
+**Version**: 1.6.1
 
 [English version below](#english-version)
 
@@ -150,6 +150,9 @@ Le script configure automatiquement :
 - **EL9** : dépôts SUSE Liberty Linux (SLL) dans `/etc/yum.repos.d/sll.repo`
 - **EL7/8** : dépôts SLES Expanded Support dans `/etc/yum.repos.d/sles_es.repo`
 
+> **Avec SUSE Multi-Linux Manager (MLM)** : si les dépôts SLL sont déjà configurés via MLM (`susemanager:channels.repo`), créez un fichier `/etc/yum.repos.d/sll.repo` vide (commentaire uniquement) pour que le script détecte les dépôts existants. L'option `--repo-url` n'est pas nécessaire.
+> L'URL par défaut (`repo.suse.de`) est un miroir interne SUSE non accessible publiquement.
+
 ### Mode dry-run et interactif
 
 ```bash
@@ -206,6 +209,7 @@ Le fichier `metadata.json` est toujours créé et contient les métadonnées du 
 │   └── SHA256SUMS
 ├── deleted-files/             # Fichiers supprimés lors de la migration
 │   ├── usr/share/redhat-release/
+│   ├── usr/lib/os-release     # Cible du symlink /etc/os-release
 │   └── etc/dnf/protected.d/redhat-release.conf
 ├── repos/                     # Fichiers .repo
 ├── release-files/             # /etc/os-release, etc.
@@ -253,8 +257,7 @@ sudo ./liberate.sh --rollback
 ### Restauration minimale
 
 ```bash
-# Restaure fichiers supprimés + paquet release uniquement
-# Ne supprime PAS les paquets SUSE
+# Supprime les paquets SUSE, restaure fichiers supprimés + paquet release
 sudo ./liberate.sh --restore-minimal
 ```
 
@@ -286,12 +289,19 @@ sudo ./liberate.sh --restore-select
 
 Affiche une vue d'ensemble du backup sélectionné (contenu, taille, état du système), puis propose chaque action individuellement. Les éléments vides sont ignorés automatiquement.
 
+### Notes sur la restauration
+
+- Les fichiers de dépôts SUSE (`sll.repo`, `sles_es.repo`) présents dans le backup sont **automatiquement filtrés** lors de la restauration pour éviter les conflits RPM (obsoletes)
+- `/usr/lib/os-release` (cible du symlink `/etc/os-release`) est sauvegardé et restauré correctement
+- L'ordre de restauration garantit que les paquets SUSE sont supprimés **avant** la réinstallation des paquets release d'origine
+- Si les dépôts SUSE (MLM, RMT) sont encore actifs, ils sont désactivés pendant l'installation des paquets d'origine
+
 ### Comparaison des modes de restauration
 
 | Mode | Supprime SUSE | Restaure repos | Restaure fichiers supprimés | Restaure paquet release | Restaure config |
 |------|:-------------:|:--------------:|:---------------------------:|:-----------------------:|:---------------:|
 | `--restore` | oui | oui | oui | oui | oui |
-| `--restore-minimal` | non | non | oui | oui | non |
+| `--restore-minimal` | oui | non | oui | oui | non |
 | `--rollback` | non | oui | non | non | non |
 | `--restore-repos` | non | oui | non | non | non |
 | `--restore-release` | non | non | non | oui | non |
@@ -321,7 +331,7 @@ Affiche une vue d'ensemble du backup sélectionné (contenu, taille, état du sy
 | `--import-backup <file>` | Importe une sauvegarde depuis une archive |
 | **Restauration** | |
 | `--restore [name]` | Restauration complète vers l'OS original |
-| `--restore-minimal [name]` | Restauration minimale (fichiers + paquet release) |
+| `--restore-minimal [name]` | Restauration minimale (supprime SUSE + fichiers + paquet release) |
 | `--restore-repos [name]` | Restaurer uniquement les dépôts |
 | `--restore-release [name]` | Restaurer uniquement les paquets release |
 | `--restore-files [name]` | Restaurer uniquement les fichiers supprimés |
@@ -367,6 +377,7 @@ Affiche une vue d'ensemble du backup sélectionné (contenu, taille, état du sy
 | `SUSE repos not configured` | Dépôts SUSE manquants | Configurer les dépôts avant migration |
 | `Backup not found` | Sauvegarde introuvable | Vérifier avec `--list-backups` |
 | `Failed to download packages` | Problème réseau | Vérifier la connectivité aux dépôts |
+| `Could not resolve host: repo.suse.de` | URL par défaut inaccessible | Utiliser `--repo-url` ou configurer les dépôts via MLM/RMT |
 
 ### Conseils de dépannage
 
@@ -386,7 +397,7 @@ MIT License
 
 # English Version
 
-**Version**: 1.5.0
+**Version**: 1.6.1
 
 ---
 
@@ -534,6 +545,9 @@ The script automatically configures:
 - **EL9**: SUSE Liberty Linux (SLL) repos in `/etc/yum.repos.d/sll.repo`
 - **EL7/8**: SLES Expanded Support repos in `/etc/yum.repos.d/sles_es.repo`
 
+> **With SUSE Multi-Linux Manager (MLM)**: if SLL repos are already configured via MLM (`susemanager:channels.repo`), create an empty `/etc/yum.repos.d/sll.repo` file (comment only) so the script detects existing repos. The `--repo-url` option is not needed.
+> The default URL (`repo.suse.de`) is an internal SUSE mirror not publicly accessible.
+
 ### Dry-run and Interactive Modes
 
 ```bash
@@ -590,6 +604,7 @@ The `metadata.json` file is always created and contains system metadata along wi
 │   └── SHA256SUMS
 ├── deleted-files/             # Files deleted during migration
 │   ├── usr/share/redhat-release/
+│   ├── usr/lib/os-release     # Symlink target for /etc/os-release
 │   └── etc/dnf/protected.d/redhat-release.conf
 ├── repos/                     # .repo files
 ├── release-files/             # /etc/os-release, etc.
@@ -637,8 +652,7 @@ sudo ./liberate.sh --rollback
 ### Minimal Restore
 
 ```bash
-# Restore deleted files + release package only
-# Does NOT remove SUSE packages
+# Removes SUSE packages, restores deleted files + release package
 sudo ./liberate.sh --restore-minimal
 ```
 
@@ -670,12 +684,19 @@ sudo ./liberate.sh --restore-select
 
 Displays an overview of the selected backup (contents, sizes, system state), then prompts for each action individually. Empty elements are automatically skipped.
 
+### Restore Notes
+
+- SUSE repository files (`sll.repo`, `sles_es.repo`) present in the backup are **automatically filtered out** during restore to avoid RPM conflicts (obsoletes)
+- `/usr/lib/os-release` (symlink target of `/etc/os-release`) is properly backed up and restored
+- Restore order ensures SUSE packages are removed **before** reinstalling original release packages
+- If SUSE repos (MLM, RMT) are still active, they are disabled during original package installation
+
 ### Restore Modes Comparison
 
 | Mode | Removes SUSE | Restores repos | Restores deleted files | Restores release package | Restores config |
 |------|:------------:|:--------------:|:----------------------:|:------------------------:|:---------------:|
 | `--restore` | yes | yes | yes | yes | yes |
-| `--restore-minimal` | no | no | yes | yes | no |
+| `--restore-minimal` | yes | no | yes | yes | no |
 | `--rollback` | no | yes | no | no | no |
 | `--restore-repos` | no | yes | no | no | no |
 | `--restore-release` | no | no | no | yes | no |
@@ -705,7 +726,7 @@ Displays an overview of the selected backup (contents, sizes, system state), the
 | `--import-backup <file>` | Import a backup from archive |
 | **Restore** | |
 | `--restore [name]` | Full restore to original OS |
-| `--restore-minimal [name]` | Minimal restore (files + release package) |
+| `--restore-minimal [name]` | Minimal restore (removes SUSE + files + release package) |
 | `--restore-repos [name]` | Restore only repositories |
 | `--restore-release [name]` | Restore only release packages |
 | `--restore-files [name]` | Restore only deleted files |
@@ -751,6 +772,7 @@ Displays an overview of the selected backup (contents, sizes, system state), the
 | `SUSE repos not configured` | Missing SUSE repositories | Configure repositories before migration |
 | `Backup not found` | Backup not found | Check with `--list-backups` |
 | `Failed to download packages` | Network issue | Check connectivity to repositories |
+| `Could not resolve host: repo.suse.de` | Default URL not accessible | Use `--repo-url` or configure repos via MLM/RMT |
 
 ### Troubleshooting Tips
 

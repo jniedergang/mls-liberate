@@ -25,7 +25,7 @@ set -euo pipefail
 # =============================================================================
 
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_VERSION="1.4.0"
+readonly SCRIPT_VERSION="1.6.1"
 readonly SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Paths
@@ -428,7 +428,7 @@ create_backup() {
     # Backup release files
     if [[ "$do_release" == true ]]; then
         log_message "INFO" "Backing up release files..."
-        for file in /etc/os-release /etc/redhat-release /etc/system-release /etc/centos-release; do
+        for file in /usr/lib/os-release /etc/os-release /etc/redhat-release /etc/system-release /etc/centos-release; do
             if [[ -f "$file" ]]; then
                 cp -a "$file" "$CURRENT_BACKUP_DIR/release-files/" 2>/dev/null || true
             fi
@@ -782,6 +782,7 @@ backup_deleted_files() {
     local files_to_backup=(
         "/usr/share/redhat-release"
         "/etc/dnf/protected.d/redhat-release.conf"
+        "/usr/lib/os-release"
         "/etc/os-release"
         "/etc/redhat-release"
         "/etc/system-release"
@@ -820,7 +821,7 @@ backup_deleted_files() {
     log_message "SUCCESS" "Backed up $backed_up file(s)/directory(ies) that will be deleted"
 }
 
-# Minimal restore - only restore deleted files and release package
+# Minimal restore - remove SUSE packages, restore deleted files and release package
 restore_minimal() {
     local backup_name="${RESTORE_BACKUP:-latest}"
     local backup_path
@@ -862,11 +863,10 @@ restore_minimal() {
     echo "  Backup: $(basename "$backup_path")"
     echo "  Original OS: $orig_os_name $orig_os_version"
     echo ""
-    echo "This will restore:"
-    echo "  - Deleted files (/usr/share/redhat-release, /etc/dnf/protected.d/*, etc.)"
-    echo "  - Original release package(s)"
-    echo ""
-    echo "This will NOT remove SUSE packages (use --restore for full restore)"
+    echo "This will:"
+    echo "  1. Remove SUSE release packages (sles_es-release, sll-release, etc.)"
+    echo "  2. Restore deleted files (/usr/share/redhat-release, /usr/lib/os-release, etc.)"
+    echo "  3. Install original release package(s)"
     echo ""
 
     if [[ "$DRY_RUN" == true ]]; then
@@ -879,10 +879,26 @@ restore_minimal() {
         exit 0
     fi
 
+    # Step 1: Remove SUSE release packages
+    log_message "INFO" "Step 1/3: Removing SUSE release packages..."
+    local suse_removed=0
+    for suse_pkg in sll-release sll-logos sles_es-release sles_es-logos sles_es-release-server; do
+        if rpm -q "$suse_pkg" &>/dev/null; then
+            log_message "INFO" "Removing $suse_pkg..."
+            rpm -e --nodeps "$suse_pkg" 2>/dev/null || true
+            ((suse_removed++)) || true
+        fi
+    done
+    if [[ $suse_removed -gt 0 ]]; then
+        log_message "SUCCESS" "Removed $suse_removed SUSE package(s)"
+    else
+        log_message "INFO" "No SUSE packages found"
+    fi
+
     local restored_count=0
 
-    # Step 1: Restore deleted files
-    log_message "INFO" "Step 1/2: Restoring deleted files..."
+    # Step 2: Restore deleted files
+    log_message "INFO" "Step 2/3: Restoring deleted files..."
 
     local deleted_dir="${backup_path}/deleted-files"
     if [[ -d "$deleted_dir" ]]; then
@@ -911,8 +927,8 @@ restore_minimal() {
         log_message "WARN" "No deleted-files directory in backup"
     fi
 
-    # Step 2: Install original release package
-    log_message "INFO" "Step 2/2: Installing original release package..."
+    # Step 3: Install original release package
+    log_message "INFO" "Step 3/3: Installing original release package..."
 
     local rpm_dir="${backup_path}/rpms"
     local rpms_installed=false
@@ -935,9 +951,9 @@ restore_minimal() {
             pkg_list=$(cat "$backup_path/release-packages.list" | tr '\n' ' ')
 
             if command -v dnf &>/dev/null; then
-                dnf install -y --allowerasing $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
+                dnf install -y --allowerasing --disablerepo='susemanager:sll*' --disablerepo='sll*' --disablerepo='sles*' $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
             elif command -v yum &>/dev/null; then
-                yum install -y $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
+                yum install -y --disablerepo='susemanager:sll*' --disablerepo='sll*' --disablerepo='sles*' $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
             fi
         fi
     fi
@@ -955,15 +971,13 @@ restore_minimal() {
     log_message "SUCCESS" "Minimal restore completed!"
     echo ""
     echo "Summary:"
+    echo "  - Removed $suse_removed SUSE package(s)"
     echo "  - Restored $restored_count deleted file(s)"
     if [[ "$rpms_installed" == true ]]; then
         echo "  - Original release packages installed"
     else
         echo "  - Release packages: MANUAL INSTALLATION REQUIRED"
     fi
-    echo ""
-    echo "Note: SUSE packages are still installed."
-    echo "      Use --restore for full restore (removes SUSE packages)"
     echo ""
 }
 
@@ -1071,12 +1085,24 @@ restore_repos() {
     fi
 
     # Remove SUSE repos
-    rm -f /etc/yum.repos.d/SLL*.repo /etc/yum.repos.d/sll*.repo /etc/yum.repos.d/sles*.repo 2>/dev/null || true
+    rm -f /etc/yum.repos.d/SLL*.repo /etc/yum.repos.d/sll*.repo /etc/yum.repos.d/sles*.repo /etc/yum.repos.d/SLES*.repo 2>/dev/null || true
 
     local count=0
     if [[ -d "$backup_path/repos" ]] && [[ -n "$(ls -A "$backup_path/repos" 2>/dev/null)" ]]; then
-        cp -a "$backup_path/repos/"* /etc/yum.repos.d/
-        count=$(ls -1 "$backup_path/repos/" 2>/dev/null | wc -l)
+        local repo_file
+        for repo_file in "$backup_path/repos/"*; do
+            local repo_basename
+            repo_basename=$(basename "$repo_file")
+            # Skip SUSE/SLL repos — they should not be restored
+            case "$repo_basename" in
+                sll*.repo|SLL*.repo|sles*.repo|SLES*.repo)
+                    log_message "INFO" "Skipping SUSE repo from backup: $repo_basename"
+                    continue
+                    ;;
+            esac
+            cp -a "$repo_file" /etc/yum.repos.d/
+            ((count++)) || true
+        done
         log_message "SUCCESS" "Restored $count repository file(s)"
     else
         log_message "WARN" "No repository files in backup"
@@ -1095,6 +1121,15 @@ restore_release_packages() {
         return 0
     fi
 
+    # Warn if SUSE packages are still installed (RPM conflicts via obsoletes)
+    for suse_pkg in sll-release sles_es-release sles_es-release-server; do
+        if rpm -q "$suse_pkg" &>/dev/null; then
+            log_message "WARN" "Le paquet SUSE '$suse_pkg' est installé — conflit possible"
+            log_message "WARN" "Utilisez --restore ou --restore-select pour une restauration complète"
+            break
+        fi
+    done
+
     local rpm_dir="${backup_path}/rpms"
 
     if [[ -d "$rpm_dir" ]] && [[ -n "$(ls -A "$rpm_dir"/*.rpm 2>/dev/null)" ]]; then
@@ -1108,9 +1143,9 @@ restore_release_packages() {
         local pkg_list
         pkg_list=$(tr '\n' ' ' < "$backup_path/release-packages.list")
         if command -v dnf &>/dev/null; then
-            dnf install -y --allowerasing $pkg_list 2>&1 | tee -a "$LOG_FILE"
+            dnf install -y --allowerasing --disablerepo='susemanager:sll*' --disablerepo='sll*' --disablerepo='sles*' $pkg_list 2>&1 | tee -a "$LOG_FILE"
         elif command -v yum &>/dev/null; then
-            yum install -y $pkg_list 2>&1 | tee -a "$LOG_FILE"
+            yum install -y --disablerepo='susemanager:sll*' --disablerepo='sll*' --disablerepo='sles*' $pkg_list 2>&1 | tee -a "$LOG_FILE"
         fi
     else
         log_message "WARN" "No release packages or package list found in backup"
@@ -1307,13 +1342,22 @@ restore_select() {
         return 0
     fi
 
+    # Warn if user wants to restore release packages without removing SUSE first
+    if [[ "$do_release" == true && "$do_suse" == false && "$has_suse" == true ]]; then
+        log_message "WARN" "Les paquets SUSE sont toujours installés — la restauration des paquets release peut échouer (conflit RPM)"
+        if ! confirm "Continuer quand même ?" "n"; then
+            do_release=false
+        fi
+    fi
+
     echo ""
-    [[ "$do_repos" == true ]] && restore_repos
-    [[ "$do_release" == true ]] && restore_release_packages
+    # Execute in correct order: SUSE removal first to avoid RPM conflicts
+    [[ "$do_suse" == true ]] && remove_suse_packages
     [[ "$do_files" == true ]] && restore_deleted_files_from_backup
+    [[ "$do_release" == true ]] && restore_release_packages
+    [[ "$do_repos" == true ]] && restore_repos
     [[ "$do_config" == true ]] && restore_config
     [[ "$do_marker" == true ]] && remove_liberated_marker
-    [[ "$do_suse" == true ]] && remove_suse_packages
 
     echo ""
     log_message "SUCCESS" "Selected restore operations completed"
@@ -1524,7 +1568,7 @@ restore_original_system() {
     fi
 
     # Step 1: Remove SUSE release packages
-    log_message "INFO" "Step 1/4: Removing SUSE release packages..."
+    log_message "INFO" "Step 1/5: Removing SUSE release packages..."
     for suse_pkg in sll-release sll-logos sles_es-release sles_es-logos sles_es-release-server; do
         if rpm -q "$suse_pkg" &>/dev/null; then
             log_message "INFO" "Removing $suse_pkg..."
@@ -1532,22 +1576,57 @@ restore_original_system() {
         fi
     done
 
-    # Step 2: Restore repository configuration
-    log_message "INFO" "Step 2/4: Restoring repository configuration..."
+    # Step 2: Restore deleted files
+    log_message "INFO" "Step 2/5: Restoring deleted files..."
+    local deleted_dir="${backup_path}/deleted-files"
+    if [[ -d "$deleted_dir" ]] && [[ -f "${backup_path}/deleted-files.manifest" ]]; then
+        local file_count=0
+        while IFS= read -r file; do
+            if [[ -n "$file" ]] && [[ -e "${deleted_dir}${file}" ]]; then
+                local parent_dir
+                parent_dir=$(dirname "$file")
+                mkdir -p "$parent_dir" 2>/dev/null || true
+                if cp -a "${deleted_dir}${file}" "$file" 2>/dev/null; then
+                    log_message "INFO" "Restored: $file"
+                    ((file_count++)) || true
+                else
+                    log_message "WARN" "Failed to restore: $file"
+                fi
+            fi
+        done < "${backup_path}/deleted-files.manifest"
+        log_message "SUCCESS" "Restored $file_count deleted file(s)"
+    else
+        log_message "WARN" "No deleted files directory or manifest in backup"
+    fi
 
-    # Remove SUSE repos
-    rm -f /etc/yum.repos.d/SLL*.repo /etc/yum.repos.d/sles*.repo 2>/dev/null || true
+    # Step 3: Restore repository configuration
+    log_message "INFO" "Step 3/5: Restoring repository configuration..."
 
-    # Restore original repos
+    # Remove SUSE repos (uppercase and lowercase patterns)
+    rm -f /etc/yum.repos.d/SLL*.repo /etc/yum.repos.d/sll*.repo /etc/yum.repos.d/sles*.repo /etc/yum.repos.d/SLES*.repo 2>/dev/null || true
+
+    # Restore original repos (skip SUSE repos that may be in backup)
     if [[ -d "$backup_path/repos" ]] && [[ -n "$(ls -A "$backup_path/repos" 2>/dev/null)" ]]; then
-        cp -a "$backup_path/repos/"* /etc/yum.repos.d/
+        local repo_file
+        for repo_file in "$backup_path/repos/"*; do
+            local repo_basename
+            repo_basename=$(basename "$repo_file")
+            # Skip SUSE/SLL repos — they should not be restored
+            case "$repo_basename" in
+                sll*.repo|SLL*.repo|sles*.repo|SLES*.repo)
+                    log_message "INFO" "Skipping SUSE repo from backup: $repo_basename"
+                    continue
+                    ;;
+            esac
+            cp -a "$repo_file" /etc/yum.repos.d/
+        done
         log_message "INFO" "Repository files restored"
     else
         log_message "WARN" "No repository files in backup"
     fi
 
-    # Step 3: Install original release packages
-    log_message "INFO" "Step 3/4: Installing original release packages..."
+    # Step 4: Install original release packages
+    log_message "INFO" "Step 4/5: Installing original release packages..."
 
     local rpm_dir="${backup_path}/rpms"
     local rpms_installed=false
@@ -1580,13 +1659,13 @@ restore_original_system() {
             local pkg_list
             pkg_list=$(cat "$backup_path/release-packages.list" | tr '\n' ' ')
 
-            # Clean dnf/yum cache
+            # Clean dnf/yum cache and install (disable SUSE repos to avoid obsoletes conflicts)
             if command -v dnf &>/dev/null; then
                 dnf clean all &>/dev/null
-                dnf install -y $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
+                dnf install -y --disablerepo='susemanager:sll*' --disablerepo='sll*' --disablerepo='sles*' $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
             elif command -v yum &>/dev/null; then
                 yum clean all &>/dev/null
-                yum install -y $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
+                yum install -y --disablerepo='susemanager:sll*' --disablerepo='sll*' --disablerepo='sles*' $pkg_list 2>&1 | tee -a "$LOG_FILE" && rpms_installed=true
             fi
         fi
     fi
@@ -1602,8 +1681,8 @@ restore_original_system() {
         fi
     fi
 
-    # Step 4: Restore configuration files
-    log_message "INFO" "Step 4/4: Restoring configuration files..."
+    # Step 5: Restore configuration files
+    log_message "INFO" "Step 5/5: Restoring configuration files..."
 
     # Restore protected.d
     if [[ -d "$backup_path/dnf-yum-config/protected.d" ]]; then
@@ -1635,6 +1714,7 @@ restore_original_system() {
     echo ""
     echo "Summary:"
     echo "  - SUSE release packages removed"
+    echo "  - Deleted files restored"
     echo "  - Original repository configuration restored"
     if [[ "$rpms_installed" == true ]]; then
         echo "  - Original release packages installed"
@@ -2227,6 +2307,7 @@ OPTIONS:
     --repo-url <url>        Base URL for SUSE repos (default: https://repo.suse.de)
                             Can also be set via LIBERATE_REPO_URL env variable
                             Example: --repo-url https://rmt.example.com/repo
+                            Not needed if repos are managed by SUSE Multi-Linux Manager
     --dry-run               Show commands without executing them
     --help, -h              Show this help message
 
@@ -2240,8 +2321,8 @@ OPTIONS:
     --rollback              Restore repository configs only (partial restore)
     --restore [name]        Full system restore (removes SUSE, reinstalls original)
                             Use 'latest' or backup timestamp (e.g., 20240115_103045)
-    --restore-minimal [name] Restore only deleted files and release package
-                            Does NOT remove SUSE packages (lighter restore)
+    --restore-minimal [name] Minimal restore: remove SUSE packages, restore deleted
+                            files and release package (3 steps)
     --restore-repos [name]  Restore only repository files (/etc/yum.repos.d/)
     --restore-release [name] Restore only release packages (RPMs)
     --restore-files [name]  Restore only deleted files
@@ -2268,7 +2349,7 @@ SUPPORTED DISTRIBUTIONS:
   - EuroLinux 7, 8, 9
 
 PREREQUISITES:
-  - SUSE repositories must be configured before running this script
+  - SUSE repositories must be configured for migration (not required for backup/restore)
   - Root privileges required
   - At least 100 MB free disk space for backup
 
@@ -2291,7 +2372,7 @@ EXAMPLES:
   # Full restore to original distribution (uses latest backup)
   $SCRIPT_NAME --restore
 
-  # Minimal restore (only deleted files and release package, keeps SUSE)
+  # Minimal restore (removes SUSE, restores deleted files and release package)
   $SCRIPT_NAME --restore-minimal
 
   # Restore from a specific backup
@@ -2553,7 +2634,7 @@ main() {
         exit $?
     fi
 
-    # Handle restore-minimal mode (only deleted files and release package)
+    # Handle restore-minimal mode (remove SUSE, restore deleted files and release package)
     if [[ "$DO_RESTORE_MINIMAL" == true ]]; then
         restore_minimal
         exit $?
